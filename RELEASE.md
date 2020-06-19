@@ -63,6 +63,9 @@
 
 ### For component authors
 
+*   Added BigQueryToElwcExampleGen to take a query as input to generate
+    ELWC(ExampleListAsContext) examples.
+
 ## Documentation updates
 
 # Version 0.24.1
