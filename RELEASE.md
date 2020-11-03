@@ -10,6 +10,8 @@
 
 ## Deprecations
 
+*   TrainerFnArgs is deprecated by FnArgs.
+
 ## Bug fixes and other changes
 
 ## Documentation updates

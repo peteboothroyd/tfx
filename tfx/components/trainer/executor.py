@@ -37,7 +37,14 @@ from tfx.utils import json_utils
 from tfx.utils import path_utils
 
 from tensorflow.python.lib.io import file_io  # pylint: disable=g-direct-tensorflow-import
+from tensorflow.python.util import deprecation  # pylint: disable=g-direct-tensorflow-import
 from tensorflow_metadata.proto.v0 import schema_pb2
+
+
+TrainerFnArgs = deprecation.deprecated_alias(  # pylint: disable=invalid-name
+    deprecated_name='tfx.components.trainer.executor.TrainerFnArgs',
+    name='tfx.components.trainer.fn_args_utils.FnArgs',
+    func_or_class=fn_args_utils.FnArgs)
 
 
 def _all_files_pattern(file_pattern: Text) -> Text:
@@ -57,19 +64,6 @@ def _is_chief():
 
   # 'master' is a legacy notation of chief node in distributed training flock.
   return task_type == 'chief' or (task_type == 'master' and task_index == 0)
-
-
-class TrainerFnArgs(dict):
-  """Wrapper class to help migrate from contrib.HParam to new data structure."""
-
-  def __getattr__(self, key):
-    if key in self:
-      return self[key]
-    else:
-      raise AttributeError('No such attribute: ' + key)
-
-  def __setattr__(self, key, value):
-    self[key] = value
 
 
 class GenericExecutor(base_executor.BaseExecutor):
@@ -100,7 +94,7 @@ class GenericExecutor(base_executor.BaseExecutor):
 
   def _GetFnArgs(self, input_dict: Dict[Text, List[types.Artifact]],
                  output_dict: Dict[Text, List[types.Artifact]],
-                 exec_properties: Dict[Text, Any]) -> TrainerFnArgs:
+                 exec_properties: Dict[Text, Any]) -> fn_args_utils.FnArgs:
     fn_args = fn_args_utils.get_common_fn_args(input_dict, exec_properties)
 
     # Load and deserialize custom config from execution properties.
@@ -139,36 +133,15 @@ class GenericExecutor(base_executor.BaseExecutor):
         output_dict[constants.MODEL_RUN_KEY])
 
     # TODO(b/126242806) Use PipelineInputs when it is available in third_party.
-    return TrainerFnArgs(
-        # A list of uris for train files.
-        train_files=fn_args.train_files,
-        # An optional single uri for transform graph produced by TFT. Will be
-        # None if not specified.
-        transform_output=fn_args.transform_graph_path,
-        # A single uri for the output directory of the serving model.
-        serving_model_dir=serving_model_dir,
-        # A single uri for the output directory of the eval model.
-        # Note that this is estimator only, Keras doesn't require it for TFMA.
-        eval_model_dir=eval_model_dir,
-        # A list of uris for eval files.
-        eval_files=fn_args.eval_files,
-        # A single uri for the output directory of model training related files.
-        model_run_dir=model_run_dir,
-        # A single uri for schema file.
-        schema_file=fn_args.schema_path,
-        # Number of train steps.
-        train_steps=fn_args.train_steps,
-        # Number of eval steps.
-        eval_steps=fn_args.eval_steps,
-        # Base model that will be used for this training job.
-        base_model=base_model,
-        # An optional kerastuner.HyperParameters config.
-        hyperparameters=hyperparameters_config,
-        # A fn_args_utils.DataAccessor. Contains factories that can create
-        # tf.data.Datasets or other means to access the train/eval data.
-        data_accessor=fn_args.data_accessor,
-        # Additional parameters to pass to trainer function.
-        **custom_config)
+    fn_args.transform_output = fn_args.transform_graph_path
+    fn_args.serving_model_dir = serving_model_dir
+    fn_args.eval_model_dir = eval_model_dir
+    fn_args.model_run_dir = model_run_dir
+    fn_args.schema_file = fn_args.schema_path
+    fn_args.base_model = base_model
+    fn_args.hyperparameters = hyperparameters_config
+    fn_args.custom_config = custom_config
+    return fn_args
 
   def Do(self, input_dict: Dict[Text, List[types.Artifact]],
          output_dict: Dict[Text, List[types.Artifact]],
