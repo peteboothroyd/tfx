@@ -29,6 +29,7 @@ from tfx.proto.orchestration import execution_result_pb2
 from tfx.types import standard_artifacts
 
 from google.protobuf import text_format
+from ml_metadata.proto import metadata_store_pb2
 
 
 class InprocessExecutor(base_executor.BaseExecutor):
@@ -96,7 +97,7 @@ class PythonExecutorOperatorTest(test_utils.TfxTest):
     executor_output_uri = os.path.join(self.tmp_dir, 'executor_output')
     executor_output = operator.run_executor(
         data_types.ExecutionInfo(
-            execution_id=1,
+            execution_metadata=metadata_store_pb2.Execution(id=1),
             input_dict=input_dict,
             output_dict=output_dict,
             exec_properties=exec_properties,
@@ -131,7 +132,7 @@ class PythonExecutorOperatorTest(test_utils.TfxTest):
     executor_output_uri = os.path.join(self.tmp_dir, 'executor_output')
     executor_output = operator.run_executor(
         data_types.ExecutionInfo(
-            execution_id=1,
+            execution_metadata=metadata_store_pb2.Execution(id=1),
             input_dict=input_dict,
             output_dict=output_dict,
             exec_properties=exec_properties,
@@ -173,7 +174,7 @@ class PythonExecutorOperatorTest(test_utils.TfxTest):
     executor_output_uri = os.path.join(self.tmp_dir, 'executor_output')
     executor_output = operator.run_executor(
         data_types.ExecutionInfo(
-            execution_id=1,
+            execution_metadata=metadata_store_pb2.Execution(id=1),
             input_dict=input_dict,
             output_dict=output_dict,
             exec_properties=exec_properties,
@@ -224,7 +225,7 @@ class PythonExecutorOperatorTest(test_utils.TfxTest):
     executor_output_uri = os.path.join(self.tmp_dir, 'executor_output')
     operator.run_executor(
         data_types.ExecutionInfo(
-            execution_id=1,
+            execution_metadata=metadata_store_pb2.Execution(id=1),
             input_dict={},
             output_dict={},
             exec_properties={},
