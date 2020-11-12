@@ -33,6 +33,13 @@ message ResolverConfig {
     // corresponding ModelBlessing artifact. The result will be consumed by
     // components that need the latest model that is blessed such as Evaluator.
     LATEST_BLESSED_MODEL = 2;
+    // Similar to LATEST_ARTIFACT, but only that are not processed by the
+    // input component yet, so that same input artifact would not trigger new
+    // executions.
+    LATEST_UNPROCESSED_ARTIFACT = 3;
+    // Similar to LATEST_UNPROCESSED_ARTIFACT, but picks the oldest artifacts among the
+    // unprocessed artifacts.
+    OLDEST_UNPROCESSED_ARTIFACT = 4;
   }
   // TODO(b/152230663): Make this one of special resolver policies or generic
   // ResolverConfig.

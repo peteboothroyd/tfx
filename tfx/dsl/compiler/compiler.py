@@ -24,6 +24,7 @@ from tfx.dsl.compiler import constants
 from tfx.dsl.components.base import base_component
 from tfx.dsl.components.base import base_driver
 from tfx.dsl.components.base import base_node
+from tfx.dsl.experimental import _composite_resolvers
 from tfx.dsl.experimental import latest_artifacts_resolver
 from tfx.dsl.experimental import latest_blessed_model_resolver
 from tfx.orchestration import data_types
@@ -166,10 +167,16 @@ class Compiler(object):
       resolver = tfx_node.exec_properties[resolver_node.RESOLVER_CLASS]
       if resolver == latest_artifacts_resolver.LatestArtifactsResolver:
         node.inputs.resolver_config.resolver_policy = (
-            pipeline_pb2.ResolverConfig.ResolverPolicy.LATEST_ARTIFACT)
+            pipeline_pb2.ResolverConfig.LATEST_ARTIFACT)
       elif resolver == latest_blessed_model_resolver.LatestBlessedModelResolver:
         node.inputs.resolver_config.resolver_policy = (
-            pipeline_pb2.ResolverConfig.ResolverPolicy.LATEST_BLESSED_MODEL)
+            pipeline_pb2.ResolverConfig.LATEST_BLESSED_MODEL)
+      elif resolver == _composite_resolvers.OldestUnprocessedArtifactsResolver:
+        node.inputs.resolver_config.resolver_policy = (
+            pipeline_pb2.ResolverConfig.OLDEST_UNPROCESSED_ARTIFACT)
+      elif resolver == _composite_resolvers.LatestUnprocessedArtifactsResolver:
+        node.inputs.resolver_config.resolver_policy = (
+            pipeline_pb2.ResolverConfig.LATEST_UNPROCESSED_ARTIFACT)
       else:
         raise ValueError("Got unsupported resolver policy: {}".format(
             resolver.type))
