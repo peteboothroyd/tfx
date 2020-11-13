@@ -2,6 +2,9 @@
 
 ## Major Features and Improvements
 
+*   Supported output example artifact for BulkInferrer which can be used to link
+    with downstream training.
+
 ## Breaking changes
 
 ### For pipeline authors
