@@ -19,7 +19,7 @@ core task generation loop based on the state of MLMD db.
 
 import abc
 import typing
-from typing import Dict, List, Optional, Text, Type, TypeVar
+from typing import Callable, Dict, List, Optional, Text, Type, TypeVar
 
 import attr
 from tfx import types
@@ -29,32 +29,47 @@ from ml_metadata.proto import metadata_store_pb2
 
 
 @attr.s(frozen=True)
-class NodeUid:
-  """Unique identifier for a node in the pipeline.
+class PipelineUid:
+  """Unique identifier for a pipeline.
 
   Attributes:
     pipeline_id: Id of the pipeline containing the node. Corresponds to
       `Pipeline.pipeline_info.id` in the pipeline IR.
     pipeline_run_id: This is set only for sync pipelines and corresponds to
       `PipelineRuntimeSpec.pipeline_run_id` in the pipeline IR.
-    node_id: Node id. Corresponds to `PipelineNode.node_info.id` in the pipeline
-      IR.
   """
   pipeline_id = attr.ib(type=Text)
   pipeline_run_id = attr.ib(type=Optional[Text])
-  node_id = attr.ib(type=Text)
 
   @classmethod
-  def from_pipeline_node(cls: Type['NodeUid'], pipeline: pipeline_pb2.Pipeline,
-                         node: pipeline_pb2.PipelineNode) -> 'NodeUid':
+  def from_pipeline(cls: Type['PipelineUid'],
+                    pipeline: pipeline_pb2.Pipeline) -> 'PipelineUid':
     if pipeline.runtime_spec.HasField('pipeline_run_id'):
       pipeline_run_id = (
           pipeline.runtime_spec.pipeline_run_id.field_value.string_value)
     else:
       pipeline_run_id = None
     return cls(
-        pipeline_id=pipeline.pipeline_info.id,
-        pipeline_run_id=pipeline_run_id,
+        pipeline_id=pipeline.pipeline_info.id, pipeline_run_id=pipeline_run_id)
+
+
+@attr.s(frozen=True)
+class NodeUid:
+  """Unique identifier for a node in the pipeline.
+
+  Attributes:
+    pipeline_uid: The pipeline UID.
+    node_id: Node id. Corresponds to `PipelineNode.node_info.id` in the pipeline
+      IR.
+  """
+  pipeline_uid = attr.ib(type=PipelineUid)
+  node_id = attr.ib(type=Text)
+
+  @classmethod
+  def from_pipeline_node(cls: Type['NodeUid'], pipeline: pipeline_pb2.Pipeline,
+                         node: pipeline_pb2.PipelineNode) -> 'NodeUid':
+    return cls(
+        pipeline_uid=PipelineUid.from_pipeline(pipeline),
         node_id=node.node_info.id)
 
 
@@ -83,12 +98,21 @@ class Task(abc.ABC):
 
 
 class HasNodeUid(abc.ABC):
-  """Abstract class for node tasks."""
+  """Abstract mixin class for node tasks."""
 
   @property
   @abc.abstractmethod
   def node_uid(self) -> NodeUid:
     """Returns the unique identifier of the node."""
+
+
+class HasPipelineUid(abc.ABC):
+  """Abstract mixin class for pipeline tasks."""
+
+  @property
+  @abc.abstractmethod
+  def pipeline_uid(self) -> PipelineUid:
+    """Returns the unique identifier of the pipeline."""
 
 
 @attr.s(frozen=True)
@@ -136,12 +160,63 @@ class CancelNodeTask(Task, HasNodeUid):
     return (self.task_type_id(), self.node_uid)
 
 
+@attr.s(frozen=True)
+class RegisterPipelineTask(Task, HasPipelineUid):
+  """Task to register a pipeline for execution in the task manager.
+
+  Attributes:
+    pipeline_uid: Uid of the pipeline to be registered.
+    pipeline: The pipeline IR proto.
+    callback: Callback to be invoked post registration.
+  """
+  _pipeline_uid = attr.ib(type=PipelineUid)
+  pipeline = attr.ib(type=pipeline_pb2.Pipeline)
+  callback = attr.ib(type=Callable[[], None])
+
+  @property
+  def pipeline_uid(self) -> PipelineUid:
+    return self._pipeline_uid
+
+  @property
+  def task_id(self) -> TaskId:
+    return (self.task_type_id(), self.pipeline_uid)
+
+
+@attr.s(frozen=True)
+class UnregisterPipelineTask(Task, HasPipelineUid):
+  """Task to unregister a pipeline in the task manager.
+
+  Attributes:
+    pipeline_uid: Uid of the pipeline to be unregistered.
+    pipeline: The pipeline IR proto.
+    callback: Callback to be invoked post unregistration.
+  """
+  _pipeline_uid = attr.ib(type=PipelineUid)
+  callback = attr.ib(type=Callable[[], None])
+
+  @property
+  def pipeline_uid(self) -> PipelineUid:
+    return self._pipeline_uid
+
+  @property
+  def task_id(self) -> TaskId:
+    return (self.task_type_id(), self.pipeline_uid)
+
+
 def is_exec_node_task(task: Task) -> bool:
   return task.task_type_id() == ExecNodeTask.task_type_id()
 
 
 def is_cancel_node_task(task: Task) -> bool:
   return task.task_type_id() == CancelNodeTask.task_type_id()
+
+
+def is_register_pipeline_task(task: Task) -> bool:
+  return task.task_type_id() == RegisterPipelineTask.task_type_id()
+
+
+def is_unregister_pipeline_task(task: Task) -> bool:
+  return task.task_type_id() == UnregisterPipelineTask.task_type_id()
 
 
 def exec_node_task_id_from_pipeline_node(

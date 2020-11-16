@@ -37,18 +37,6 @@ class ResolvedInfo:
   input_artifacts = attr.ib(type=Optional[Dict[Text, List[types.Artifact]]])
 
 
-def _active_executions(
-    executions: Iterable[metadata_store_pb2.Execution]
-) -> List[metadata_store_pb2.Execution]:
-  result = []
-  for execution in executions:
-    if execution.last_known_state not in (metadata_store_pb2.Execution.NEW,
-                                          metadata_store_pb2.Execution.RUNNING):
-      continue
-    result.append(execution)
-  return result
-
-
 def _generate_task_from_execution(
     metadata_handler: metadata.Metadata, pipeline: pipeline_pb2.Pipeline,
     node: pipeline_pb2.PipelineNode,
@@ -95,7 +83,9 @@ def generate_task_from_active_execution(
   Raises:
     RuntimeError: If there are multiple active executions for the node.
   """
-  active_executions = _active_executions(executions)
+  active_executions = [
+      e for e in executions if execution_lib.is_execution_active(e)
+  ]
   if not active_executions:
     return None
   if len(active_executions) > 1:
@@ -111,7 +101,10 @@ def _extract_properties(
   result = {}
   for key, prop in itertools.chain(execution.properties.items(),
                                    execution.custom_properties.items()):
-    result[key] = common_utils.get_value(prop)
+    value = common_utils.get_metadata_value(prop)
+    if value is None:
+      raise ValueError(f'Unexpected property with empty value; key: {key}')
+    result[key] = value
   return result
 
 
