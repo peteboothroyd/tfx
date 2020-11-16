@@ -473,10 +473,9 @@ example_gen = CsvExampleGen(input=examples, input_config=input,
 
 ## Custom ExampleGen
 
-Note: this feature is only available after TFX 0.14.
-
-If the currently available ExampleGen components don't fit your needs, create
-a custom ExampleGen, which will include a new executor extended from BaseExampleGenExecutor.
+If the currently available ExampleGen components don't fit your needs, you can
+create a custom ExampleGen, which will enable you to read from different data
+sources or in different data formats.
 
 ### File-Based ExampleGen
 
@@ -503,7 +502,38 @@ example_gen = FileBasedExampleGen(
 ```
 
 Now, we also support reading Avro and Parquet files using this
-[method](https://github.com/tensorflow/tfx/blob/master/tfx/components/example_gen/custom_executors/avro_component_test.py).
+[method](https://github.com/tensorflow/tfx/blob/master/tfx/components/example_gen/custom_executors/).
+
+### Additional Data Formats
+
+Apache Beam supports reading a number of
+[additional data formats](https://beam.apache.org/documentation/io/built-in/).
+through Beam I/O Transforms. You can create custom ExampleGen components by
+leveraging the Beam I/O Transforms using a pattern similar to the
+[Avro example](https://github.com/tensorflow/tfx/blob/master/tfx/components/example_gen/custom_executors/avro_executor.py#L56)
+
+```python
+  return (pipeline
+          | 'ReadFromAvro' >> beam.io.ReadFromAvro(avro_pattern)
+          | 'ToTFExample' >> beam.Map(utils.dict_to_example))
+```
+As of this writing the currently supported formats and data sources for the Beam
+Python SDK include:
+
+* Apache Avro
+* Apache Parquet
+* Amazon S3
+* Google Cloud Storage (GCS)
+* Apache Hadoop
+* Apache Kafka
+* Google Cloud Pub/Sub
+* Google Cloud BigQuery
+* Google Cloud BigTable
+* Google Cloud Datastore
+* MongoDB
+
+Check the [Beam docs](https://beam.apache.org/documentation/io/built-in/) for
+the latest list.
 
 ### Query-Based ExampleGen
 
