@@ -17,7 +17,6 @@ import base64
 import re
 from typing import Any, Callable, Dict, Union
 
-from absl import logging
 import attr
 from tfx.dsl.placeholder import placeholder as ph
 from tfx.orchestration.portable import data_types
@@ -31,14 +30,6 @@ from google.protobuf import json_format
 from google.protobuf import message
 from google.protobuf import message_factory
 from google.protobuf import text_format
-
-
-class NullDereferenceError(Exception):
-  """Raised by the ExpressionResolver when dereferencing None or empty list."""
-
-  def __init__(self, placeholder):
-    self.placeholder = placeholder
-    super().__init__()
 
 
 @attr.s(auto_attribs=True, frozen=True)
@@ -61,7 +52,7 @@ class ResolutionContext:
 # Note: Pytype's int includes long from Python3
 # We does not support bytes, which may result from proto field access. Must use
 # base64 encode operator to explicitly convert it into str.
-_PlaceholderResolvedTypes = (int, float, str, bool, type(None))
+_PlaceholderResolvedTypes = (int, float, str, bool)
 _PlaceholderResolvedTypeHints = Union[_PlaceholderResolvedTypes]
 
 
@@ -89,12 +80,8 @@ def resolve_placeholder_expression(
     raise ValueError(
         "Pipeline node or pipeline info is missing from the placeholder ResolutionContext."
     )
-  try:
-    result = _ExpressionResolver(context).resolve(expression)
-  except NullDereferenceError as err:
-    logging.warn("Dereferenced None during placeholder evaluation. Ignoring.")
-    logging.warn("Placeholder=%s", err.placeholder)
-    return None
+  result = _ExpressionResolver(context).resolve(expression)
+  # bool value results from proto field access.
   if not isinstance(result, _PlaceholderResolvedTypes):
     raise ValueError(
         f"Placeholder evaluates to an unsupported type: {type(result)}.")
@@ -166,12 +153,6 @@ class _ExpressionResolver:
     if placeholder.type == placeholder_pb2.Placeholder.Type.EXEC_INVOCATION:
       return context
 
-    if placeholder.type == placeholder_pb2.Placeholder.Type.EXEC_PROPERTY:
-      if placeholder.key in context:
-        return context[placeholder.key]
-      else:
-        raise NullDereferenceError(placeholder)
-
     # Handle remaining placeholder types.
     try:
       return context[placeholder.key]
@@ -199,8 +180,6 @@ class _ExpressionResolver:
       self, op: placeholder_pb2.ArtifactUriOperator) -> str:
     """Evaluates the artifact URI operator."""
     resolved_artifact = self.resolve(op.expression)
-    if resolved_artifact is None:
-      raise NullDereferenceError(op.expression)
     if not isinstance(resolved_artifact, artifact.Artifact):
       raise ValueError("ArtifactUriOperator expects the expression "
                        "to evaluate to an artifact. "
@@ -215,8 +194,6 @@ class _ExpressionResolver:
       self, op: placeholder_pb2.ArtifactValueOperator) -> str:
     """Evaluates the artifact value operator."""
     resolved_artifact = self.resolve(op.expression)
-    if resolved_artifact is None:
-      raise NullDereferenceError(op.expression)
     if not isinstance(resolved_artifact, value_artifact.ValueArtifact):
       raise ValueError("ArtifactValueOperator expects the expression "
                        "to evaluate to a value artifact."
@@ -226,20 +203,12 @@ class _ExpressionResolver:
   @_register(placeholder_pb2.ConcatOperator)
   def _resolve_concat_operator(self, op: placeholder_pb2.ConcatOperator) -> str:
     """Evaluates the concat operator."""
-    parts = []
-    for e in op.expressions:
-      value = self.resolve(e)
-      if value is None:
-        raise NullDereferenceError(e)
-      parts.append(value)
-    return "".join(str(part) for part in parts)
+    return "".join(str(self.resolve(e)) for e in op.expressions)
 
   @_register(placeholder_pb2.IndexOperator)
   def _resolve_index_operator(self, op: placeholder_pb2.IndexOperator) -> Any:
     """Evaluates the index operator."""
     value = self.resolve(op.expression)
-    if value is None or not value:
-      raise NullDereferenceError(op.expression)
     try:
       return value[op.index]
     except (TypeError, IndexError) as e:
@@ -251,8 +220,6 @@ class _ExpressionResolver:
       self, op: placeholder_pb2.Base64EncodeOperator) -> str:
     """Evaluates the Base64 encode operator."""
     value = self.resolve(op.expression)
-    if value is None:
-      raise NullDereferenceError(op.expression)
     if isinstance(value, str):
       return base64.b64encode(value.encode()).decode("ascii")
     elif isinstance(value, bytes):
@@ -267,8 +234,6 @@ class _ExpressionResolver:
       op: placeholder_pb2.ProtoOperator) -> Union[int, float, str, bool, bytes]:
     """Evaluates the proto operator."""
     raw_message = self.resolve(op.expression)
-    if raw_message is None:
-      raise NullDereferenceError(op.expression)
 
     if isinstance(raw_message, str):
       # We need descriptor pool to parse encoded raw messages.
